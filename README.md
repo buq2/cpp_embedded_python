@@ -55,7 +55,7 @@ cmake --build build
 
 # Examples will be compiled to bin directory
 # Run for example
-build\bin\multithreaded.exe
+build\bin\multithreaded
 ```
 
 ## Troubleshooting
