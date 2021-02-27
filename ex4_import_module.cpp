@@ -15,6 +15,7 @@ int main() {
             import sys,os;
             sys.path.append(os.getcwd())
             sys.path.append(os.path.join(os.getcwd(), '..'))
+            sys.path.append(os.path.join(os.getcwd(), '..', '..'))
         )");
 
         py::module_ sys = py::module_::import("sys");

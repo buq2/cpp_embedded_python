@@ -12,9 +12,12 @@ IF(MSVC)
   SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin)
 ENDIF(MSVC)
 
-add_subdirectory(pybind11)
-
+# Finding python separately from pybind11 produced better results for me.
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+# Most likely linking to Threads is not needed, but in some environments
+# I had problems with missing pthreads stuff.
 find_package (Threads REQUIRED)
+add_subdirectory(pybind11)
 
 add_executable(hello ex1_hello.cpp)
 target_link_libraries(hello PRIVATE pybind11::embed)

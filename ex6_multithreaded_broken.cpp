@@ -24,6 +24,7 @@ void Process(int thread_idx) {
                 import sys,os;
                 sys.path.append(os.getcwd())
                 sys.path.append(os.path.join(os.getcwd(), '..'))
+                sys.path.append(os.path.join(os.getcwd(), '..', '..'))
             )");
 
             py::module_ calc = py::module_::import("ex6_threaded");

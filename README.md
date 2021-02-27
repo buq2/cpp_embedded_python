@@ -57,3 +57,22 @@ cmake --build build
 # Run for example
 build\bin\multithreaded.exe
 ```
+
+## Troubleshooting
+
+Most likely you are going to have problems related to CMake not finding Python paths or numpy.
+To help with Python paths, you can set them manually. So try running
+```
+cmake -S . -B build -DPython_ROOT_DIR=<dir>
+```
+
+## Docker
+
+Sure way to run the examples is to run them in a docker container:
+
+```
+docker build . -t cpp_embedded_python
+docker run --rm cpp_embedded_python ./multithreaded
+```
+
+Build process copies the local data, so you can modify the repo and rerun the build and run commands to get different output.
