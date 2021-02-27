@@ -14,6 +14,8 @@ ENDIF(MSVC)
 
 add_subdirectory(pybind11)
 
+find_package (Threads REQUIRED)
+
 add_executable(hello ex1_hello.cpp)
 target_link_libraries(hello PRIVATE pybind11::embed)
 
@@ -30,7 +32,7 @@ add_executable(import_module_use_stl ex5_import_module_use_stl.cpp)
 target_link_libraries(import_module_use_stl PRIVATE pybind11::embed)
 
 add_executable(multithreaded_broken ex6_multithreaded_broken.cpp)
-target_link_libraries(multithreaded_broken PRIVATE pybind11::embed)
+target_link_libraries(multithreaded_broken PRIVATE pybind11::embed Threads::Threads)
 
 add_executable(multithreaded ex7_multithreaded.cpp)
-target_link_libraries(multithreaded PRIVATE pybind11::embed)
+target_link_libraries(multithreaded PRIVATE pybind11::embed Threads::Threads)

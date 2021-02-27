@@ -21,7 +21,9 @@ such as ZeroMQ.
 sudo apt install python3-dev python3-pip cmake
 pip3 install --user numpy
 
-git submodule init --recursive
+git clone https://github.com/buq2/cpp_embedded_python.git
+cd cpp_embedded_python
+git submodule update --init --recursive
 
 cmake -S . -B build
 cmake --build build
@@ -44,7 +46,9 @@ For example use following if you have 64-bit Python installed:
 ```
 pip3 install --user numpy
 
-git submodule init --recursive
+git clone https://github.com/buq2/cpp_embedded_python.git
+cd cpp_embedded_python
+git submodule update --init --recursive
 
 cmake -S . -B build -DCMAKE_GENERATOR_PLATFORM=x64
 cmake --build build
