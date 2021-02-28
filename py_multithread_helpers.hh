@@ -124,12 +124,14 @@ class PythonEnvironment {
         // const auto init_signal_handlers = true;
         // Py_InitializeEx(init_signal_handlers); // Start python
 
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION < 9
         if (!PyEval_ThreadsInitialized()) {
             // Needed for multithreading, missing from basic pybind11
             // 3.7 call automatically with Py_Initialize()
             // Will be removed in 3.11
             PyEval_InitThreads(); 
         }
+#endif
 
         // Releas GIL so threading can start
         ts_ = PyThreadState_Get();
