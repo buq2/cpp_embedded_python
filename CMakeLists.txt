@@ -12,6 +12,10 @@ IF(MSVC)
   SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin)
 ENDIF(MSVC)
 
+# If you have problems CMake finding correct python version, you can try to set 
+# Python3_FIND_VIRTUALENV to ONLY, FIRST or STANDARD
+#SET(Python3_FIND_VIRTUALENV ONLY)
+
 # Finding python separately from pybind11 produced better results for me.
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 # Most likely linking to Threads is not needed, but in some environments
@@ -38,4 +42,4 @@ add_executable(multithreaded_broken ex6_multithreaded_broken.cpp)
 target_link_libraries(multithreaded_broken PRIVATE pybind11::embed Threads::Threads)
 
 add_executable(multithreaded ex7_multithreaded.cpp)
-target_link_libraries(multithreaded PRIVATE pybind11::embed Threads::Threads)
+target_link_libraries(multithreaded PRIVATE pybind11::embed Threads::Threads Python3::Python Python3::Module)

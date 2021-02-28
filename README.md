@@ -26,7 +26,7 @@ cd cpp_embedded_python
 git submodule update --init --recursive
 
 cmake -S . -B build
-cmake --build build
+cmake --build build --parallel 12
 
 # Examples will be compiled to bin directory
 # Run for example
@@ -51,20 +51,56 @@ cd cpp_embedded_python
 git submodule update --init --recursive
 
 cmake -S . -B build -DCMAKE_GENERATOR_PLATFORM=x64
-cmake --build build
+cmake --build build --parallel 12
 
 # Examples will be compiled to bin directory
 # Run for example
 build\bin\multithreaded
 ```
 
-## Troubleshooting
+# Troubleshooting
 
 Most likely you are going to have problems related to CMake not finding Python paths or numpy.
 To help with Python paths, you can set them manually. So try running
 ```
 cmake -S . -B build -DPython_ROOT_DIR=<dir>
 ```
+
+## CMake not finding correct virtualenv
+
+Try uncommenting line `SET(Python3_FIND_VIRTUALENV ONLY)` in `CMakeLists.txt`.
+
+## ModuleNotFoundError: No module named 'encodings'
+
+If you get error similar to:
+```
+Fatal Python error: initfsencoding: unable to load the file system codec 
+ModuleNotFoundError: No module named 'encodings'
+```
+there is something wrong with your PATH/PYTHONHOME environment variable.
+
+Try setting env `PYTHONHOME` to directory which contains Python installation. 
+
+For example in Windows Power Shell I had to run
+```
+$env:PYTHONHOME = 'C:\Users\buq2\.conda\envs\cpp_embedded_python'; 
+.\build\bin\multithreaded.exe
+```
+
+## Conda
+
+CMake has better support for conda than for example pipenv and finding all Python development files tends to work better with conda.
+For more information check here: https://cmake.org/cmake/help/git-master/module/FindPython3.html#hints and take a look at `Python3_FIND_VIRTUALENV`.
+
+Install conda from https://docs.conda.io/en/latest/miniconda.html and create a new env with.
+
+```
+conda create --name cpp_embedded_python python=3.9
+conda activate cpp_embedded_python
+```
+
+Rest of the installation commands should work normally.
+
 
 ## Docker
 
