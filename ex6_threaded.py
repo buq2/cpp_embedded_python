@@ -1,9 +1,6 @@
 print('Python module loaded')
 
-try:
-    import numpy as np
-except:
-    print('numpy is missing. Install it with \'pip install numpy\'')
+import numpy as np
 
 def sum(i, j):
     return np.sum(np.array(i) + np.array(j))
