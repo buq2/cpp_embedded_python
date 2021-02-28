@@ -42,4 +42,7 @@ add_executable(multithreaded_broken ex6_multithreaded_broken.cpp)
 target_link_libraries(multithreaded_broken PRIVATE pybind11::embed Threads::Threads)
 
 add_executable(multithreaded ex7_multithreaded.cpp)
-target_link_libraries(multithreaded PRIVATE pybind11::embed Threads::Threads Python3::Python Python3::Module)
+target_link_libraries(multithreaded PRIVATE pybind11::embed Threads::Threads)
+
+add_executable(multithreaded_gui ex8_multithreaded_gui.cpp)
+target_link_libraries(multithreaded_gui PRIVATE pybind11::embed Threads::Threads)
