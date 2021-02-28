@@ -1,19 +1,23 @@
 # Examples how to embed Python to CPP + multithreading
 
 This repo contains few examples of python embedding to C++.
-Most of the examples are from pybind11 documentation: 
+Most of the early examples are from pybind11 documentation: 
 https://pybind11.readthedocs.io/en/stable/advanced/embedding.html
 
-Later examples demonstrate problems with multithreading and simple
+Later examples demonstrate problems with multithreading and
 simple/lazy embedding. Later examples show how proper safe multi
 threading can be achieved.
 
 Note: I don't think there is any way to get multiple concurrent
-threads running Python code inside same process. GIL is created
+threads running Python code inside the same process. GIL is created
 per process, not per subinterpreter. If you needs to
 use Python to process stuff generated from C++, look into
 either launching separate Python processes or use of networking
 such as ZeroMQ.
+
+As creating this repo is on going learning experience, expect bugs.
+If you find some, please let me know so everyone can benefit from
+your findings :)
 
 ## Ubuntu
 

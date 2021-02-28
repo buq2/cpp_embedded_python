@@ -46,3 +46,11 @@ target_link_libraries(multithreaded PRIVATE pybind11::embed Threads::Threads)
 
 add_executable(multithreaded_gui ex8_multithreaded_gui.cpp)
 target_link_libraries(multithreaded_gui PRIVATE pybind11::embed Threads::Threads)
+
+IF (NOT WIN32)
+  # This example uses Python module multiprocessing. In Windows it
+  # uses spawn to create the new process which will lead to inifite creation of
+  # new processes.
+  add_executable(multithreaded_gui2 ex9_multithreaded_gui2.cpp)
+  target_link_libraries(multithreaded_gui2 PRIVATE pybind11::embed Threads::Threads)
+ENDIF()
