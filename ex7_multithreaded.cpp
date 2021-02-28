@@ -52,7 +52,7 @@ void Process(int thread_idx) {
         data2.push_back(i*2);
     }
 
-    for (int i = 0; i < 50; ++i) {
+    for (int i = 0; i < 10; ++i) {
         std::cout << "Thread " << thread_idx << " processing " << i << std::endl;
         try {
             auto lock = thread_state.GetLock(); // Lock GIL
