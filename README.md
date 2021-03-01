@@ -34,7 +34,7 @@ cmake --build build --parallel 12
 
 # Examples will be compiled to bin directory
 # Run for example
-build\bin\multithreaded.exe
+build/bin/multithreaded
 ```
 
 ## Windows
@@ -59,7 +59,7 @@ cmake --build build --parallel 12
 
 # Examples will be compiled to bin directory
 # Run for example
-build\bin\multithreaded
+build\bin\multithreaded.exe
 ```
 
 # Troubleshooting
