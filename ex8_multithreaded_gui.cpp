@@ -26,7 +26,9 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  */
-
+#ifdef _MSC_VER
+#define _STL_CRT_SECURE_INVALID_PARAMETER(expr) _CRT_SECURE_INVALID_PARAMETER(expr)
+#endif
 #include <pybind11/embed.h>
 #include <pybind11/stl.h>
 #include <iostream>
@@ -43,11 +45,11 @@ void Process(int thread_idx) {
     std::cout << "Thread started: " << thread_idx << std::endl;
 
     // Each thread must use its own thread state object
-    PythonThreadState thread_state = PythonEnvironment::GetInstance().CreateThreadState();
+    auto thread_state = PythonEnvironment::GetInstance().CreateThreadState();
 
     for (int i = 0; i < 30; ++i) {
         try {
-            auto lock = thread_state.GetLock(); // Lock GIL
+            auto lock = thread_state->GetLock(); // Lock GIL
 
             // We could move this import outside of the loop, but it
             // we would need to ensure that when its freed, we also lock GIL, etc
@@ -78,7 +80,7 @@ int main() {
     {
         // Setup paths
         auto ts = env.CreateThreadState();
-        auto lock = ts.GetLock();
+        auto lock = ts->GetLock();
         py::exec(R"(
             # Add current working directory and subdir to module search path
             # If build is under cwd, we catch the example modules.
@@ -86,12 +88,14 @@ int main() {
             sys.path.append(os.getcwd())
             sys.path.append(os.path.join(os.getcwd(), '..'))
             sys.path.append(os.path.join(os.getcwd(), '..', '..'))
+
+            import numpy as np # For some reason numpy needs to be imported from the main thread
         )");
     }
 
     std::vector<std::thread> threads;
     for (int i = 0; i < 20; ++i) {
-        threads.emplace_back([&](){Process(i);});
+        threads.emplace_back([=](){Process(i);});
     }
     for (auto &t : threads) {
         t.join();

@@ -39,27 +39,37 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 class PythonThreadState {
     class Lock;
  public:
-    PythonThreadState(PyInterpreterState* interpreter) 
+    PythonThreadState(PyInterpreterState* interpreter)
         :
         state_(PyThreadState_New(interpreter)),
+        thread_id_(std::this_thread::get_id()),
+        was_new_(true)
+    {}
+
+    PythonThreadState(PyThreadState* state)
+        :
+        state_(state),
         thread_id_(std::this_thread::get_id())
     {}
 
     /// Lock GIL
     /// Returned Lock object must be kept alive during any pybind11 / Python method calls
-    Lock GetLock() {
+    std::unique_ptr<Lock> GetLock() {
         CheckThread();
-        return Lock(state_);
+        return std::unique_ptr<Lock>(new Lock(state_, was_new_));
     }
 
     ~PythonThreadState() {
         CheckThread();
-        // Need to aqcuire GIL
-        PyEval_RestoreThread(state_);
+
+        if (!was_new_) {
+            // No need to do anything
+            return;
+        }
 
         // Clear and destroy
-        PyThreadState_Clear(state_); //GIL needs to be held
-        PyThreadState_DeleteCurrent(); // No need for GIL
+        PyThreadState_Clear(state_);
+        PyThreadState_Delete(state_);
         state_ = nullptr;
     }
  private:
@@ -68,16 +78,23 @@ class PythonThreadState {
         if (thread_id_ != std::this_thread::get_id()) {
             throw std::runtime_error("Tried to lock from thread which does not own PythonThreadState");
         }
+        if (PyGILState_Check()) {
+            throw std::runtime_error("Tried to lock GIL twice on same thread");
+        }
     }
 
     class Lock {
      public:
-        Lock(PyThreadState *ts) 
+        Lock(PyThreadState *ts, bool was_new)
             :
-            ts_(ts) 
+            ts_(ts)
         {
-            // Lock GIL, set current thread state to ts
-            PyEval_RestoreThread(ts_); 
+            // Get GIL
+            if (!was_new) {
+                PyEval_RestoreThread(ts_);
+            } else {
+                PyEval_AcquireThread(ts_);
+            }
         }
 
         ~Lock() {
@@ -85,11 +102,18 @@ class PythonThreadState {
             PyEval_ReleaseThread(ts_);
         }
      private:
-        PyThreadState* ts_;
+        Lock(const Lock &) = delete;
+        Lock &operator=(const Lock &) = delete;
+        Lock &operator=(Lock &&) = delete;
+        PyThreadState* ts_{nullptr};
     };
  private:
-    PyThreadState* state_;
+    PythonThreadState(const PythonThreadState &) = delete;
+    PythonThreadState &operator=(const PythonThreadState &) = delete;
+    PythonThreadState &operator=(PythonThreadState &&) = delete;
+    PyThreadState* state_{nullptr};
     std::thread::id thread_id_;
+    bool was_new_{false};
 };
 
 /// This class initializes the Python environment.
@@ -97,7 +121,7 @@ class PythonEnvironment {
  public:
     static PythonEnvironment& GetInstance()
     {
-        static PythonEnvironment instance; 
+        static PythonEnvironment instance;
         return instance;
     }
 
@@ -105,16 +129,24 @@ class PythonEnvironment {
         // Global state of Python interpreter.
         // We could have sub interpreters, which kinda have their own environment,
         // but let's use just one so module loading is faster.
-        return PyInterpreterState_Main();
+        return ts_->interp;
     }
 
-    PythonThreadState CreateThreadState() 
+    std::unique_ptr<PythonThreadState> CreateThreadState()
     {
-        return PythonThreadState(GetInterpreter());
+        if (thread_id_ == std::this_thread::get_id()) {
+            // Creating from same thread
+            return std::unique_ptr<PythonThreadState>(new PythonThreadState(ts_));
+        }
+
+        // Need to create a new one
+        auto out = std::unique_ptr<PythonThreadState>(new PythonThreadState(GetInterpreter()));
+        return out;
     }
  private:
     PythonEnvironment() :
-        ts_(nullptr)
+        ts_(nullptr),
+        thread_id_(std::this_thread::get_id())
     {
         // If we are using pybind11, we should initialize using its own initializer
         // This locks GIL
@@ -129,25 +161,28 @@ class PythonEnvironment {
             // Needed for multithreading, missing from basic pybind11
             // 3.7 call automatically with Py_Initialize()
             // Will be removed in 3.11
-            PyEval_InitThreads(); 
+            PyEval_InitThreads();
         }
 #endif
 
         // Releas GIL so threading can start
+        // Basically same as PyEval_SaveThread
         ts_ = PyThreadState_Get();
         PyEval_ReleaseThread(ts_);
     }
 
     ~PythonEnvironment() {
+        PyEval_RestoreThread(ts_);
         pybind11::finalize_interpreter();
         // Or without pybind11
         // Py_Finalize();
     }
 
+
+ private:
     PythonEnvironment(const PythonEnvironment &) = delete;
     PythonEnvironment &operator=(const PythonEnvironment &) = delete;
     PythonEnvironment &operator=(PythonEnvironment &&) = delete;
- private:
-    // Do we need to use this?
     PyThreadState* ts_;
+    std::thread::id thread_id_;
 };
