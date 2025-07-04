@@ -27,29 +27,58 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  */
 
-#pragma once
+ #pragma once
 
 #include <pybind11/embed.h>
 #include <thread>
 
+// Compatibility macros for different Python versions
+#if PY_VERSION_HEX < 0x03020000
+    // Python < 3.2: No finalization check available
+    #define Py_IsFinalizing() (0)
+#elif PY_VERSION_HEX < 0x03070000
+    // Python 3.2-3.6: Use _Py_Finalizing global variable
+    #ifdef __cplusplus
+    extern "C" {
+    #endif
+    extern PyThreadState* _Py_Finalizing;
+    #ifdef __cplusplus
+    }
+    #endif
+    #define Py_IsFinalizing() (_Py_Finalizing != NULL)
+#elif PY_VERSION_HEX < 0x030D0000
+    // Python 3.7-3.12: _Py_IsFinalizing() is available
+    // Note: It's not officially public API, but it's the only option
+    #ifndef Py_IsFinalizing
+        #define Py_IsFinalizing() _Py_IsFinalizing()
+    #endif
+#endif
+// Python 3.13+: Py_IsFinalizing() is part of public API
+
 // Helper classes for Python >= 3.3
 
 // PyThreadSafe is interpreter and thread specific object.
-// It should not be used form other threads.
+// It should not be used from other threads.
 class PythonThreadState {
     class Lock;
  public:
     PythonThreadState(PyInterpreterState* interpreter)
         :
-        state_(PyThreadState_New(interpreter)),
+        state_(nullptr),
         thread_id_(std::this_thread::get_id()),
         was_new_(true)
-    {}
+    {
+        // Check if Python is still running
+        if (!Py_IsFinalizing()) {
+            state_ = PyThreadState_New(interpreter);
+        }
+    }
 
     PythonThreadState(PyThreadState* state)
         :
         state_(state),
-        thread_id_(std::this_thread::get_id())
+        thread_id_(std::this_thread::get_id()),
+        was_new_(false)
     {}
 
     /// Lock GIL
@@ -62,14 +91,27 @@ class PythonThreadState {
     ~PythonThreadState() {
         CheckThread();
 
-        if (!was_new_) {
+        if (!was_new_ || !state_) {
             // No need to do anything
             return;
         }
 
+        // Check if Python is finalizing
+        if (Py_IsFinalizing()) {
+            // Don't attempt cleanup during finalization
+            return;
+        }
+
+        // For new thread states, we need to properly clean up
+        // We need to make this thread state current to clean it up
+        PyThreadState* old_state = PyThreadState_Swap(state_);
+
         // Clear and destroy
         PyThreadState_Clear(state_);
-        PyThreadState_Delete(state_);
+        PyThreadState_DeleteCurrent();
+
+        // Note: We can't restore the old state after DeleteCurrent
+        // The thread now has no associated thread state
         state_ = nullptr;
     }
  private:
@@ -78,6 +120,7 @@ class PythonThreadState {
         if (thread_id_ != std::this_thread::get_id()) {
             throw std::runtime_error("Tried to lock from thread which does not own PythonThreadState");
         }
+        // Note: PyGILState_Check() is not reliable in all contexts
         if (PyGILState_Check()) {
             throw std::runtime_error("Tried to lock GIL twice on same thread");
         }
@@ -87,8 +130,15 @@ class PythonThreadState {
      public:
         Lock(PyThreadState *ts, bool was_new)
             :
-            ts_(ts)
+            ts_(ts),
+            was_new_(was_new)
         {
+            if (!ts_ || Py_IsFinalizing()) {
+                // No thread state or Python is finalizing, don't acquire
+                ts_ = nullptr;
+                return;
+            }
+
             // Get GIL
             if (!was_new) {
                 PyEval_RestoreThread(ts_);
@@ -98,6 +148,10 @@ class PythonThreadState {
         }
 
         ~Lock() {
+            if (!ts_ || Py_IsFinalizing()) {
+                return;
+            }
+
             // Release GIL
             PyEval_ReleaseThread(ts_);
         }
@@ -106,6 +160,7 @@ class PythonThreadState {
         Lock &operator=(const Lock &) = delete;
         Lock &operator=(Lock &&) = delete;
         PyThreadState* ts_{nullptr};
+        bool was_new_;
     };
  private:
     PythonThreadState(const PythonThreadState &) = delete;
@@ -129,11 +184,16 @@ class PythonEnvironment {
         // Global state of Python interpreter.
         // We could have sub interpreters, which kinda have their own environment,
         // but let's use just one so module loading is faster.
-        return ts_->interp;
+        return ts_ ? ts_->interp : nullptr;
     }
 
     std::unique_ptr<PythonThreadState> CreateThreadState()
     {
+        if (Py_IsFinalizing() || !ts_) {
+            // Python is finalizing or not initialized
+            return nullptr;
+        }
+
         if (thread_id_ == std::this_thread::get_id()) {
             // Creating from same thread
             return std::unique_ptr<PythonThreadState>(new PythonThreadState(ts_));
@@ -146,13 +206,22 @@ class PythonEnvironment {
  private:
     PythonEnvironment() :
         ts_(nullptr),
-        thread_id_(std::this_thread::get_id())
+        thread_id_(std::this_thread::get_id()),
+        initialized_(false)
     {
+        // Check if Python is already initialized (might be in some embedded scenarios)
+        if (Py_IsInitialized()) {
+            ts_ = PyThreadState_Get();
+            initialized_ = false;  // We didn't initialize it
+            return;
+        }
+
         // If we are using pybind11, we should initialize using its own initializer
         // This locks GIL
         pybind11::initialize_interpreter();
+        initialized_ = true;
 
-        // initialize_interpreter does basically following, but also initializes some pybind22 states
+        // initialize_interpreter does basically following, but also initializes some pybind11 states
         // const auto init_signal_handlers = true;
         // Py_InitializeEx(init_signal_handlers); // Start python
 
@@ -165,19 +234,23 @@ class PythonEnvironment {
         }
 #endif
 
-        // Releas GIL so threading can start
+        // Release GIL so threading can start
         // Basically same as PyEval_SaveThread
         ts_ = PyThreadState_Get();
-        PyEval_ReleaseThread(ts_);
+        if (ts_) {
+            PyEval_ReleaseThread(ts_);
+        }
     }
 
     ~PythonEnvironment() {
-        PyEval_RestoreThread(ts_);
-        pybind11::finalize_interpreter();
-        // Or without pybind11
-        // Py_Finalize();
+        // Only finalize if we initialized
+        if (initialized_ && ts_ && !Py_IsFinalizing()) {
+            PyEval_RestoreThread(ts_);
+            pybind11::finalize_interpreter();
+            // Or without pybind11
+            // Py_Finalize();
+        }
     }
-
 
  private:
     PythonEnvironment(const PythonEnvironment &) = delete;
@@ -185,4 +258,5 @@ class PythonEnvironment {
     PythonEnvironment &operator=(PythonEnvironment &&) = delete;
     PyThreadState* ts_;
     std::thread::id thread_id_;
+    bool initialized_;  // Track if we initialized Python
 };
